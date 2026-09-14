@@ -58,6 +58,7 @@
   .lyr:first-of-type { border-top:0; }
   .lyr input { accent-color:#38bdf8; margin:0; cursor:pointer; }
   .lyr .sw { width:9px; height:9px; border-radius:50%; box-shadow:0 0 7px currentColor; flex:0 0 auto; }
+  .lyr .sw.ic { width:18px; height:auto; border-radius:0; box-shadow:none; background:none !important; font-size:14px; line-height:1; text-align:center; }
   .lyr .nm { font-weight:600; font-size:12px; }
   .lyr .disc { color:var(--dim); font-size:9px; }
   .lyr .ct { margin-left:auto; color:var(--dim); font-size:10px; font-variant-numeric:tabular-nums; }
@@ -636,6 +637,16 @@
   const intelState = {};
   const REG = {};  // registry source id -> color (populated from /api/registry)
   const CAP = { cameras:700, flights:500, sigint:400, humint:250, disasters:500, publicsafety:600, radiation:500, launches:40, volcanoes:60, spacewx:900, maritime:3000, hormuz:1000, lightning:2500, outages:200, fire:4000 };
+  // Replace each layer's colour-dot swatch with an icon of what it actually is.
+  const LAYER_ICON = { disasters:'🌊', flights:'✈️', satellites:'🛰️', sigint:'📡', humint:'📰', cameras:'📷', publicsafety:'🚨', radiation:'☢️', launches:'🚀', volcanoes:'🌋', spacewx:'🌌', maritime:'🚢', hormuz:'⚓', lightning:'⚡', outages:'🌐', fire:'🔥' };
+  function iconify() {
+    document.querySelectorAll('#intel .lyr').forEach((l) => {
+      const layer = l.querySelector('input')?.dataset.layer, sw = l.querySelector('.sw');
+      if (!sw) return;
+      sw.textContent = LAYER_ICON[layer] || '📊';   // registry sources get a generic data icon
+      sw.classList.add('ic');
+    });
+  }
   function intelColor(it) {
     if (REG[it.kind]) return REG[it.kind];
     switch (it.kind) {
@@ -765,8 +776,10 @@
         panel.appendChild(lbl);
         bindToggle(lbl.querySelector('input'));
       }
+      iconify();   // give the newly-added registry rows their icons too
     } catch (e) { /* registry optional */ }
   })();
+  iconify();   // icon the static layers now
 
   // ============ Draggable panels — grab any panel by its title bar to reposition. ============
   // Positions persist per-panel in localStorage; double-click a title bar to snap it back.
