@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Argus</title>
+<!-- Cesium base URL must be set BEFORE the engine script so its workers/assets resolve. -->
+<script>window.CESIUM_BASE_URL = 'https://cesium.com/downloads/cesiumjs/releases/1.122/Build/Cesium/';</script>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.122/Build/Cesium/Cesium.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.122/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/5.0.0/satellite.min.js"></script>
+<style>
+  :root { --bg:#070b12; --panel:#0d1520cc; --edge:#1d2c3f; --up:#31d67a; --down:#ff4d5e; --dim:#7b8ba0; --txt:#e6edf5; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--txt);
+    font:13px/1.45 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
+  #cesium { position:absolute; inset:0; }
+  /* Cesium's default toolbar/credits are noise for an internal ops view. */
+  .cesium-viewer-bottom, .cesium-viewer-animationContainer, .cesium-viewer-timelineContainer { display:none !important; }
+  #hud { position:absolute; top:14px; left:14px; width:310px; max-height:calc(100% - 28px);
+    overflow:auto; background:var(--panel); backdrop-filter:blur(8px);
+    border:1px solid var(--edge); border-radius:12px; padding:14px 15px; z-index:5; }
+  #hud h1 { margin:0 0 2px; font-size:15px; letter-spacing:.02em; }
+  #hud .sub { color:var(--dim); font-size:11px; margin-bottom:12px; }
+  .host { display:flex; align-items:center; gap:9px; padding:8px 0; border-top:1px solid var(--edge); cursor:pointer; }
+  .host:first-of-type { border-top:0; }
+  .dot { width:9px; height:9px; border-radius:50%; flex:0 0 auto; box-shadow:0 0 8px currentColor; }
+  .dot.up { background:var(--up); color:var(--up); }
+  .dot.down { background:var(--down); color:var(--down); }
+  .host .name { font-weight:600; }
+  .host .meta { color:var(--dim); font-size:11px; }
+  .host .ms { margin-left:auto; font-variant-numeric:tabular-nums; color:var(--dim); font-size:11px; }
+  #stamp { color:var(--dim); font-size:10px; margin-top:11px; letter-spacing:.03em; }
+  .badge { display:inline-block; font-size:10px; color:var(--dim); border:1px solid var(--edge);
+    border-radius:6px; padding:1px 6px; margin-left:6px; }
+  .mesh-hd { margin:14px 0 2px; padding-top:12px; border-top:1px solid var(--edge);
+    font-weight:600; font-size:13px; letter-spacing:.02em; }
+  .legend { display:flex; gap:12px; color:var(--dim); font-size:10px; margin:2px 0 8px; }
+  .legend .k { display:inline-flex; align-items:center; gap:5px; }
+  .agent { display:flex; align-items:center; gap:9px; padding:6px 0; border-top:1px solid var(--edge); cursor:pointer; }
+  .agent:first-of-type { border-top:0; }
+  .agent .name { font-weight:600; font-size:12px; }
+  .agent .meta { color:var(--dim); font-size:10px; }
+  .agent .st { margin-left:auto; color:var(--dim); font-size:10px; }
+  .empty { color:var(--dim); font-size:11px; font-style:italic; padding:6px 0; }
+  .threat { display:flex; align-items:center; gap:9px; padding:5px 0; border-top:1px solid var(--edge); cursor:pointer; }
+  .threat:first-of-type { border-top:0; }
+  .threat .name { font-weight:600; font-size:12px; font-variant-numeric:tabular-nums; }
+  .threat .meta { color:var(--dim); font-size:10px; }
+  .threat .f { margin-left:auto; color:#ff6b6b; font-size:11px; font-weight:700; }
+  .btn { display:inline-block; cursor:pointer; font-size:11px; color:var(--txt); background:#182437;
+    border:1px solid var(--edge); border-radius:7px; padding:3px 9px; margin:6px 6px 0 0; }
+  .btn:hover { background:#20304a; }
+  #intel { position:absolute; top:14px; right:14px; width:210px; background:var(--panel); max-height:52%; overflow:auto;
+    backdrop-filter:blur(8px); border:1px solid var(--edge); border-radius:12px; padding:12px 13px; z-index:5; }
+  #intel h1 { margin:0 0 2px; font-size:14px; letter-spacing:.02em; }
+  #intel .sub { color:var(--dim); font-size:10px; margin-bottom:10px; }
+  .lyr { display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--edge); cursor:pointer; user-select:none; }
+  .lyr:first-of-type { border-top:0; }
+  .lyr input { accent-color:#38bdf8; margin:0; cursor:pointer; }
+  .lyr .sw { width:9px; height:9px; border-radius:50%; box-shadow:0 0 7px currentColor; flex:0 0 auto; }
+  .lyr .nm { font-weight:600; font-size:12px; }
+  .lyr .disc { color:var(--dim); font-size:9px; }
+  .lyr .ct { margin-left:auto; color:var(--dim); font-size:10px; font-variant-numeric:tabular-nums; }
+  #newswire { position:absolute; bottom:14px; left:14px; width:340px; max-height:40%; overflow:auto;
+    background:var(--panel); backdrop-filter:blur(8px); border:1px solid var(--edge); border-radius:12px; padding:12px 13px; z-index:5; }
+  #newswire h1 { margin:0 0 1px; font-size:14px; }
+  #newswire .live { color:#ff5252; font-weight:700; font-size:10px; letter-spacing:.06em; }
+  #newswire .sub { color:var(--dim); font-size:10px; margin-bottom:9px; }
+  .story { padding:7px 0; border-top:1px solid var(--edge); cursor:pointer; }
+  .story:first-of-type { border-top:0; }
+  .story .hd { font-weight:600; font-size:12px; line-height:1.32; }
+  .story .bd { color:var(--dim); font-size:10px; margin-top:3px; line-height:1.35; max-height:3.7em; overflow:hidden; }
+  .story .mt { color:#ff8c6b; font-size:9px; margin-top:3px; letter-spacing:.03em; text-transform:uppercase; }
+  #eyewitness { position:absolute; bottom:14px; right:14px; width:340px; max-height:46%; overflow:auto;
+    background:var(--panel); border:1px solid var(--edge); border-radius:10px; padding:13px 15px; backdrop-filter:blur(8px); }
+  #eyewitness h1 { margin:0 0 1px; font-size:14px; display:flex; align-items:center; gap:7px; }
+  #eyewitness .bolt { color:#ffd23d; }
+  #eyewitness .unv { background:#3a1d1d; color:#ff8a8a; border:1px solid #6b2b2b; font-size:8px; font-weight:700;
+    letter-spacing:.06em; padding:1px 5px; border-radius:5px; text-transform:uppercase; }
+  #eyewitness .sub { color:var(--dim); font-size:10px; margin:2px 0 9px; }
+  .ew { display:flex; gap:9px; padding:8px 0; border-top:1px solid var(--edge); cursor:pointer; text-decoration:none; color:inherit; }
+  .ew:first-of-type { border-top:0; }
+  .ew .thumb { width:58px; height:58px; flex:0 0 58px; border-radius:6px; background:#0d1520 center/cover no-repeat; position:relative; overflow:hidden; }
+  .ew .play { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:17px; color:#fff; text-shadow:0 1px 4px #000; }
+  .ew .cap { font-size:11px; line-height:1.3; max-height:3.9em; overflow:hidden; direction:auto; unicode-bidi:plaintext; }
+  .ew .mt { color:var(--dim); font-size:9px; margin-top:3px; letter-spacing:.02em; display:flex; gap:6px; flex-wrap:wrap; }
+  .ew .rg { color:#ffd23d; font-weight:700; }
+  .ew .orig { font-size:9px; color:#6b7a8f; margin-top:2px; line-height:1.25; max-height:2.5em; overflow:hidden; direction:auto; unicode-bidi:plaintext; }
+  .ew .why { font-size:9.5px; color:#7fd6a0; margin-top:3px; line-height:1.3; font-style:italic; }
+  .ew .flag { color:#ffb057; font-weight:700; }
+  /* Draggable panels — grab by the title bar. */
+  #hud h1, #intel h1, #newswire h1, #eyewitness h1 { cursor:grab; user-select:none; }
+  #hud h1:active, #intel h1:active, #newswire h1:active, #eyewitness h1:active { cursor:grabbing; }
+  .panel-dragging { z-index:60 !important; box-shadow:0 10px 34px rgba(0,0,0,.55); }
+</style>
+</head>
+<body>
+<div id="cesium"></div>
+<div id="hud">
+  <h1>Argus <span class="badge">v0</span></h1>
+  <div class="sub">Fleet reachability &mdash; live TCP&nbsp;443 probe, brokered server-side</div>
+  <div id="hosts"></div>
+  <div id="stamp">connecting&hellip;</div>
+  <div class="mesh-hd">Live mesh agents</div>
+  <div class="legend">
+    <span class="k"><span class="dot" style="background:#c084fc;color:#c084fc"></span>hub</span>
+    <span class="k"><span class="dot" style="background:#38bdf8;color:#38bdf8"></span>agents</span>
+    <span class="k"><span class="dot" style="background:#f5a623;color:#f5a623"></span>services</span>
+  </div>
+  <div id="agents"></div>
+  <div id="mesh-stamp" class="sub" style="margin-top:9px">&hellip;</div>
+  <div class="mesh-hd">Internet threats <span id="threat-count" class="badge">&ndash;</span></div>
+  <div class="legend"><span class="k"><span class="dot" style="background:#ff4d5e;color:#ff4d5e"></span>corroborated attacker &mdash; dot size = feeds</span></div>
+  <div><span class="btn" id="world-btn">🌍 world view</span><span class="btn" id="fleet-btn">🛰 fleet</span></div>
+  <div id="threats"></div>
+  <div id="threat-stamp" class="sub" style="margin-top:8px">&hellip;</div>
+</div>
+<div id="intel">
+  <h1>Intel fusion</h1>
+  <div class="sub">live open-source ingestion &mdash; toggle layers</div>
+  <label class="lyr"><input type="checkbox" data-layer="disasters"><span class="sw" style="color:#ff8c3d"></span><span><div class="nm">Disasters</div><div class="disc">USGS · EONET · GDACS</div></span><span class="ct" id="ct-disasters">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="flights"><span class="sw" style="color:#38bdf8"></span><span><div class="nm">Flights</div><div class="disc">ADS-B civil + military</div></span><span class="ct" id="ct-flights">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="satellites"><span class="sw" style="color:#ffffff"></span><span><div class="nm">Satellites</div><div class="disc">GEOINT · CelesTrak/SGP4</div></span><span class="ct" id="ct-satellites">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="sigint"><span class="sw" style="color:#c084fc"></span><span><div class="nm">SIGINT</div><div class="disc">RF emitters · radio</div></span><span class="ct" id="ct-sigint">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="humint"><span class="sw" style="color:#fbbf24"></span><span><div class="nm">HUMINT</div><div class="disc">GDELT global events</div></span><span class="ct" id="ct-humint">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="cameras"><span class="sw" style="color:#31d67a"></span><span><div class="nm">Cameras</div><div class="disc">IMINT · TfL · Caltrans</div></span><span class="ct" id="ct-cameras">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="publicsafety"><span class="sw" style="color:#ff4d4d"></span><span><div class="nm">911 &amp; Scanners</div><div class="disc">CAD dispatch + police radio</div></span><span class="ct" id="ct-publicsafety">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="radiation"><span class="sw" style="color:#a3e635"></span><span><div class="nm">Radiation</div><div class="disc">MASINT · Safecast sensors</div></span><span class="ct" id="ct-radiation">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="launches"><span class="sw" style="color:#67e8f9"></span><span><div class="nm">Launches</div><div class="disc">space · upcoming rockets</div></span><span class="ct" id="ct-launches">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="volcanoes"><span class="sw" style="color:#f97316"></span><span><div class="nm">Volcanoes</div><div class="disc">GDACS activity</div></span><span class="ct" id="ct-volcanoes">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="spacewx"><span class="sw" style="color:#4ade80"></span><span><div class="nm">Aurora / Space Wx</div><div class="disc">NOAA OVATION oval</div></span><span class="ct" id="ct-spacewx">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="maritime"><span class="sw" style="color:#2dd4bf"></span><span><div class="nm">Maritime / AIS</div><div class="disc">global live ship tracking</div></span><span class="ct" id="ct-maritime">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="hormuz"><span class="sw" style="color:#f59e0b"></span><span><div class="nm">Strait of Hormuz</div><div class="disc">chokepoint — every vessel, live</div></span><span class="ct" id="ct-hormuz">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="lightning"><span class="sw" style="color:#fde047"></span><span><div class="nm">Lightning</div><div class="disc">Blitzortung — live strikes</div></span><span class="ct" id="ct-lightning">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="outages"><span class="sw" style="color:#ef4444"></span><span><div class="nm">Internet outages</div><div class="disc">IODA — blackouts &amp; shutdowns</div></span><span class="ct" id="ct-outages">&mdash;</span></label>
+  <label class="lyr"><input type="checkbox" data-layer="fire"><span class="sw" style="color:#fb7185"></span><span><div class="nm">Active fire</div><div class="disc">NASA FIRMS &#128273;</div></span><span class="ct" id="ct-fire">&mdash;</span></label>
+</div>
+<div id="newswire">
+  <h1><span class="live">&#9679; LIVE</span> Argus Wire</h1>
+  <div class="sub" id="news-stamp">breaking from public 911 dispatch &mdash; loading&hellip;</div>
+  <div id="news-list"></div>
+</div>
+<div id="eyewitness">
+  <h1><span class="bolt">&#9889;</span> Eyewitness <span class="unv">unverified</span></h1>
+  <div class="sub" id="ew-stamp">crisis-zone footage from public Telegram aggregators &mdash; loading&hellip;</div>
+  <div id="ew-list"></div>
+</div>
+<script>
+  Cesium.Ion.defaultAccessToken = undefined; // no Ion — keyless Esri satellite base, ellipsoid terrain
+
+  // Depth-test-disable distance for all map markers. POSITIVE_INFINITY (the old value) drew every
+  // point ON TOP always — so dots on the FAR side of the globe rendered through the earth and piled
+  // near screen-center as you rotated ("following you around the world"). A finite ~world-view value
+  // ALSO failed: it only depth-tests fragments FARTHER than DDT, but at normal zoom the far side is
+  // still within that radius, so it kept bleeding. The correct value is 0 = ALWAYS depth-test, so the
+  // opaque globe occludes every far-side dot at every zoom. Verified with drillPick: far-side dots
+  // (Madagascar) unpickable/hidden, near-side dots (LA, Cairo, Lagos) still drawn at both hemisphere
+  // and world-view zoom — Cesium point primitives don't coplanar-flicker on the smooth ellipsoid.
+  const DDT = 0;
+
+  // Ground markers sit at height 0, which is exactly the surface on the smooth ellipsoid but
+  // *inside the hill* once real terrain is on (and depthTestAgainstTerrain then hides them).
+  // CLAMP_TO_GROUND pins them to whatever surface exists, so this is a no-op today and the
+  // thing that stops every dot vanishing into a mountainside the moment terrain loads.
+  // Deliberately NOT applied to satellites - they carry real orbital altitude.
+  const CLAMP = Cesium.HeightReference.CLAMP_TO_GROUND;
+
+  // Let the viewer create its default imagery layer (this is what initializes the
+  // globe surface quadtree — starting with baseLayer:false leaves it uninitialized and
+  // no tiles ever select), then drop Esri World Imagery on top as the real base. Esri
+  // is keyless + CORS-open and gives the satellite look; the underlying default layer
+  // is fully covered.
+  const viewer = new Cesium.Viewer('cesium', {
+    // preserveDrawingBuffer so the WebGL frame can be captured (screenshots/thumbnails);
+    // without it the globe renders live but reads back blank.
+    contextOptions: { webgl: { preserveDrawingBuffer: true } },
+    baseLayerPicker: false, geocoder: false, homeButton: false, sceneModePicker: false,
+    navigationHelpButton: false, animation: false, timeline: false, fullscreenButton: false,
+    infoBox: true, selectionIndicator: true,
+  });
+  // Make the opaque globe occlude markers on its far side (belt-and-braces with the finite DDT
+  // above) so dots stick to their location instead of bleeding through the earth.
+  viewer.scene.globe.depthTestAgainstTerrain = true;
+  Cesium.ArcGisMapServerImageryProvider.fromUrl(
+    'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
+  ).then((p) => viewer.imageryLayers.addImageryProvider(p))
+   .catch((e) => console.error('base imagery failed', e));
+  viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0a0f18');
+  viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#070b12');
+  // Lighting off on purpose: with the real-time sun the US sits in night half the day
+  // and the whole globe renders black. An ops view wants the imagery lit at all hours.
+  // Lighting WAS off because the real sun puts the US in darkness half the day and the whole
+  // globe renders black - a genuine problem for an ops view. A light rigged to the camera
+  // instead of the sun keeps every surface lit at all hours while still shading by surface
+  // angle, so the limb falls off and terrain gets relief. Offset up-and-left of the view axis
+  // so it acts as a key light rather than a flat frontal wash.
+  viewer.scene.globe.enableLighting = true;
+  const keyLight = new Cesium.DirectionalLight({
+    direction: Cesium.Cartesian3.clone(viewer.scene.camera.directionWC),
+    intensity: 2.0,
+  });
+  viewer.scene.light = keyLight;
+  const _kl = new Cesium.Cartesian3(), _ks = new Cesium.Cartesian3();
+  viewer.scene.preRender.addEventListener(() => {
+    const cam = viewer.scene.camera;
+    Cesium.Cartesian3.clone(cam.directionWC, _kl);
+    Cesium.Cartesian3.add(_kl, Cesium.Cartesian3.multiplyByScalar(cam.rightWC, -0.45, _ks), _kl);
+    Cesium.Cartesian3.add(_kl, Cesium.Cartesian3.multiplyByScalar(cam.upWC, -0.35, _ks), _kl);
+    Cesium.Cartesian3.normalize(_kl, keyLight.direction);
+  });
+  viewer.scene.skyAtmosphere.show = true;
+  viewer.scene.fog.enabled = true;
+  // Cesium defaults to pitch -90 (straight down). Looking at a sphere from directly overhead
+  // draws a flat disc - the single biggest reason the globe did not read as 3D. Tilting off
+  // nadir puts the limb in frame and the curvature becomes obvious.
+  const TILT = Cesium.Math.toRadians(-50);
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-95, 30.0, 2_600_000),
+    orientation: { heading: 0, pitch: TILT, roll: 0 },
+  });
+
+  // ============ Optional real 3D: elevation + OSM buildings (needs a Cesium Ion token) ============
+  // The ellipsoid is a perfectly smooth sphere - no mountains, no buildings. Real relief and
+  // building geometry are Ion-hosted, so this whole block is inert without a token and the globe
+  // behaves exactly as it did before. Token comes from /api/mapconfig (env), never committed here.
+  let osmBuildings = null;
+  const ellipsoidTerrain = new Cesium.EllipsoidTerrainProvider();
+  let worldTerrain = null;
+
+  (async () => {
+    let cfg = {};
+    try { cfg = await (await fetch('/api/mapconfig', { cache: 'no-store' })).json(); } catch { return; }
+    if (!cfg.ionToken) return;                       // no token -> stay on the smooth ellipsoid
+    Cesium.Ion.defaultAccessToken = cfg.ionToken;
+
+    const panel = document.getElementById('intel');
+    const hdr = document.createElement('div');
+    hdr.className = 'sub';
+    hdr.style.cssText = 'margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px';
+    hdr.textContent = '3D — elevation & buildings';
+    panel.appendChild(hdr);
+
+    const row = (id, name, disc) => {
+      const l = document.createElement('label');
+      l.className = 'lyr';
+      l.innerHTML = `<input type="checkbox" id="${id}"><span class="sw" style="color:#8b9dc3"></span>` +
+                    `<span><div class="nm">${name}</div><div class="disc">${disc}</div></span>` +
+                    `<span class="ct" id="ct-${id}">&mdash;</span>`;
+      panel.appendChild(l);
+      return l.querySelector('input');
+    };
+
+    // --- terrain ---
+    const tBox = row('t3d', 'Terrain', 'real elevation · Cesium World Terrain');
+    const tCt = document.getElementById('ct-t3d');
+    tBox.onchange = async () => {
+      if (tBox.checked) {
+        tCt.textContent = '…';
+        try {
+          worldTerrain = worldTerrain || await Cesium.createWorldTerrainAsync();
+          viewer.terrainProvider = worldTerrain;
+          tCt.textContent = 'on';
+        } catch (e) { tCt.textContent = 'fail'; tBox.checked = false; console.error('terrain', e); }
+      } else {
+        viewer.terrainProvider = ellipsoidTerrain;
+        tCt.textContent = '—';
+      }
+    };
+
+    // --- vertical exaggeration ---
+    // Real relief is invisible from orbit: Everest is 0.14% of the earth's radius. Exaggeration
+    // is what makes terrain readable at anything above city zoom.
+    const exRow = document.createElement('label');
+    exRow.className = 'lyr';
+    exRow.innerHTML = '<span class="sw" style="color:#8b9dc3"></span>' +
+      '<span style="flex:1"><div class="nm">Relief exaggeration</div>' +
+      '<input type="range" id="vx" min="1" max="8" step="0.5" value="1" style="width:100%;margin-top:4px"></span>' +
+      '<span class="ct" id="ct-vx">1×</span>';
+    panel.appendChild(exRow);
+    exRow.querySelector('#vx').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      viewer.scene.verticalExaggeration = v;
+      document.getElementById('ct-vx').textContent = v + '×';
+    };
+
+    // --- OSM buildings ---
+    const bBox = row('b3d', 'Buildings', 'OSM footprints, extruded · global');
+    const bCt = document.getElementById('ct-b3d');
+    bBox.onchange = async () => {
+      if (bBox.checked) {
+        bCt.textContent = '…';
+        try {
+          if (!osmBuildings) {
+            osmBuildings = await Cesium.createOsmBuildingsAsync();
+            viewer.scene.primitives.add(osmBuildings);
+          }
+          osmBuildings.show = true;
+          bCt.textContent = 'on';
+        } catch (e) { bCt.textContent = 'fail'; bBox.checked = false; console.error('buildings', e); }
+      } else if (osmBuildings) {
+        osmBuildings.show = false;
+        bCt.textContent = '—';
+      }
+    };
+  })();
+
+  const entities = new Map(); // name -> {marker, leader}
+  const hostsEl = document.getElementById('hosts');
+  const stampEl = document.getElementById('stamp');
+
+  function colorFor(up) {
+    return up ? Cesium.Color.fromCssColorString('#31d67a') : Cesium.Color.fromCssColorString('#ff4d5e');
+  }
+
+  // Several hosts share a datacenter (identical ip-api coords) and would stack into one
+  // dot. Spread a co-located group evenly around its shared point and draw a leader line
+  // back to the true location, so the map stays honest about where each box actually is.
+  function jitter(hosts) {
+    const groups = {};
+    for (const h of hosts) {
+      if (h.lat == null) continue;
+      const k = h.lat.toFixed(2) + ',' + h.lon.toFixed(2);
+      (groups[k] = groups[k] || []).push(h);
+    }
+    for (const g of Object.values(groups)) {
+      if (g.length === 1) { g[0]._lat = g[0].lat; g[0]._lon = g[0].lon; continue; }
+      const R = 1.1; // degrees
+      g.forEach((h, i) => {
+        const a = (2 * Math.PI * i) / g.length;
+        h._lat = h.lat + R * Math.sin(a);
+        h._lon = h.lon + R * Math.cos(a);
+      });
+    }
+  }
+
+  function upsertEntity(h) {
+    if (h.lat == null || h.lon == null) return;
+    const truePos = Cesium.Cartesian3.fromDegrees(h.lon, h.lat);
+    const markPos = Cesium.Cartesian3.fromDegrees(h._lon, h._lat);
+    const col = colorFor(h.up);
+    let rec = entities.get(h.name);
+    if (!rec) {
+      const marker = viewer.entities.add({
+        position: markPos,
+        point: { pixelSize: 13, color: col, outlineColor: Cesium.Color.WHITE, outlineWidth: 2,
+                 disableDepthTestDistance: DDT, heightReference: CLAMP },
+        label: { text: h.name, font: '600 13px sans-serif', pixelOffset: new Cesium.Cartesian2(12, 0),
+                 horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+                 fillColor: Cesium.Color.WHITE, showBackground: true,
+                 backgroundColor: Cesium.Color.fromCssColorString('#0d1520cc'),
+                 style: Cesium.LabelStyle.FILL, scale: 0.82,
+                 disableDepthTestDistance: DDT, heightReference: CLAMP },
+      });
+      const jittered = h._lat !== h.lat || h._lon !== h.lon;
+      const leader = jittered ? viewer.entities.add({
+        polyline: { positions: [truePos, markPos], width: 1.2,
+                    material: Cesium.Color.fromCssColorString('#7b8ba0').withAlpha(0.6),
+                    arcType: Cesium.ArcType.GEODESIC },
+      }) : null;
+      rec = { marker, leader };
+      entities.set(h.name, rec);
+    }
+    rec.marker.position = markPos;
+    rec.marker.point.color = col;
+    if (rec.leader) rec.leader.polyline.positions = [truePos, markPos];
+    rec.marker.description = `<table class="cesium-infoBox-defaultTable"><tbody>
+      <tr><th>role</th><td>${h.role}</td></tr>
+      <tr><th>host</th><td>${h.host}</td></tr>
+      <tr><th>where</th><td>${h.city || '?'}, ${h.country || '?'}</td></tr>
+      <tr><th>status</th><td>${h.up ? 'UP' : 'DOWN'} (TCP ${h.port})</td></tr>
+      <tr><th>latency</th><td>${h.ms} ms</td></tr>
+      <tr><th>checked</th><td>${h.checkedAt}</td></tr></tbody></table>`;
+  }
+
+  function renderHud(hosts) {
+    hostsEl.innerHTML = '';
+    for (const h of hosts) {
+      const row = document.createElement('div');
+      row.className = 'host';
+      row.innerHTML = `<span class="dot ${h.up ? 'up' : 'down'}"></span>
+        <span><div class="name">${h.name}</div><div class="meta">${h.city || '?'} &middot; ${h.up ? 'up' : 'down'}</div></span>
+        <span class="ms">${h.ms} ms</span>`;
+      row.onclick = () => { const rec = entities.get(h.name); if (rec) viewer.flyTo(rec.marker, { duration: 1.2 }); };
+      hostsEl.appendChild(row);
+    }
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch('/api/fleet/health', { cache: 'no-store' });
+      const { hosts } = await r.json();
+      jitter(hosts);
+      hosts.forEach(upsertEntity);
+      renderHud(hosts);
+      const up = hosts.filter((h) => h.up).length;
+      stampEl.textContent = `${up}/${hosts.length} reachable — ${new Date().toLocaleTimeString()} · re-checks every 15s`;
+    } catch (e) {
+      stampEl.textContent = 'feed error: ' + e.message;
+    }
+  }
+  poll();
+  setInterval(poll, 15_000);
+
+  // ---- Live mesh layer: this box is the hub, its live agents orbit it on spokes. ----
+  const meshEntities = new Map(); // name -> {marker, spoke}
+  let hub = null;
+  const agentsEl = document.getElementById('agents');
+  const meshStampEl = document.getElementById('mesh-stamp');
+  const agentColor = (kind) => (/service|worker/.test(kind || '') ? '#f5a623' : '#38bdf8');
+
+  function ensureHub(anchor) {
+    const pos = Cesium.Cartesian3.fromDegrees(anchor.lon, anchor.lat);
+    if (!hub) {
+      hub = viewer.entities.add({
+        position: pos,
+        point: { pixelSize: 16, color: Cesium.Color.fromCssColorString('#c084fc'),
+                 outlineColor: Cesium.Color.WHITE, outlineWidth: 2,
+                 disableDepthTestDistance: DDT, heightReference: CLAMP },
+        label: { text: 'hub · mesh', font: '700 12px sans-serif',
+                 pixelOffset: new Cesium.Cartesian2(14, -14), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+                 fillColor: Cesium.Color.WHITE, showBackground: true,
+                 backgroundColor: Cesium.Color.fromCssColorString('#0d1520cc'), scale: 0.82,
+                 disableDepthTestDistance: DDT, heightReference: CLAMP },
+      });
+    }
+    hub.position = pos;
+    return pos;
+  }
+
+  function renderMeshHud(agents, up, term) {
+    agentsEl.innerHTML = '';
+    if (!up) { meshStampEl.textContent = 'mesh offline (127.0.0.1:8795)'; return; }
+    if (!agents.length) {
+      agentsEl.innerHTML = '<div class="empty">no live worker agents — hub only</div>';
+    } else {
+      for (const a of agents) {
+        const row = document.createElement('div');
+        row.className = 'agent';
+        row.innerHTML = `<span class="dot" style="background:${agentColor(a.kind)};color:${agentColor(a.kind)}"></span>
+          <span><div class="name">${a.name}</div><div class="meta">${a.kind} · ${(a.working_on || '').slice(0, 42) || '—'}</div></span>
+          <span class="st">${a.status}</span>`;
+        row.onclick = () => { const rec = meshEntities.get(a.name); if (rec) viewer.flyTo(rec.marker, { duration: 1.0 }); };
+        agentsEl.appendChild(row);
+      }
+    }
+    meshStampEl.textContent = `${agents.length} live agent${agents.length === 1 ? '' : 's'}`
+      + (term ? ` · term ${term}` : '') + ` · ${new Date().toLocaleTimeString()} · re-polls 4s`;
+  }
+
+  async function pollMesh() {
+    try {
+      const r = await fetch('/api/mesh/agents', { cache: 'no-store' });
+      const { anchor, agents, up, term } = await r.json();
+      const hubPos = ensureHub(anchor);
+      const seen = new Set();
+      const R = 0.9, latScale = Math.cos((anchor.lat * Math.PI) / 180) || 1;
+      agents.forEach((a, i) => {
+        seen.add(a.name);
+        const ang = (2 * Math.PI * i) / agents.length;
+        const lat = anchor.lat + R * Math.sin(ang);
+        const lon = anchor.lon + (R * Math.cos(ang)) / latScale;
+        const pos = Cesium.Cartesian3.fromDegrees(lon, lat);
+        const col = Cesium.Color.fromCssColorString(agentColor(a.kind));
+        let rec = meshEntities.get(a.name);
+        if (!rec) {
+          const marker = viewer.entities.add({
+            position: pos,
+            point: { pixelSize: 10, color: col, outlineColor: Cesium.Color.WHITE, outlineWidth: 1.5,
+                     disableDepthTestDistance: DDT, heightReference: CLAMP },
+            label: { text: a.name, font: '600 11px sans-serif', pixelOffset: new Cesium.Cartesian2(9, 0),
+                     horizontalOrigin: Cesium.HorizontalOrigin.LEFT, fillColor: Cesium.Color.WHITE,
+                     showBackground: true, backgroundColor: Cesium.Color.fromCssColorString('#0d1520cc'),
+                     scale: 0.78, disableDepthTestDistance: DDT, heightReference: CLAMP },
+          });
+          const spoke = viewer.entities.add({
+            polyline: { positions: [hubPos, pos], width: 1,
+                        material: col.withAlpha(0.5), arcType: Cesium.ArcType.GEODESIC },
+          });
+          rec = { marker, spoke };
+          meshEntities.set(a.name, rec);
+        }
+        rec.marker.position = pos;
+        rec.marker.point.color = col;
+        rec.spoke.polyline.positions = [hubPos, pos];
+        rec.marker.description = `<table class="cesium-infoBox-defaultTable"><tbody>
+          <tr><th>runtime</th><td>${a.kind}</td></tr>
+          <tr><th>status</th><td>${a.status}</td></tr>
+          <tr><th>working on</th><td>${a.working_on || '—'}</td></tr></tbody></table>`;
+      });
+      for (const [name, rec] of meshEntities) {
+        if (!seen.has(name)) {
+          viewer.entities.remove(rec.marker);
+          viewer.entities.remove(rec.spoke);
+          meshEntities.delete(name);
+        }
+      }
+      renderMeshHud(agents, up, term);
+    } catch (e) {
+      meshStampEl.textContent = 'mesh feed error';
+    }
+  }
+  pollMesh();
+  setInterval(pollMesh, 4_000);
+
+  // ---- Internet-threat layer: top corroborated attackers, geolocated worldwide. ----
+  const threatEntities = new Map();
+  const threatsEl = document.getElementById('threats');
+  const threatStampEl = document.getElementById('threat-stamp');
+  const threatCountEl = document.getElementById('threat-count');
+  function threatColor(feeds) {
+    return Cesium.Color.fromCssColorString(
+      feeds >= 7 ? '#ff2d3f' : feeds >= 6 ? '#ff5b48' : feeds >= 5 ? '#ff7a3d' : '#ffa23d');
+  }
+  function renderThreatHud(actors, totals, gen) {
+    threatCountEl.textContent = totals.consensus_actors || actors.length;
+    threatsEl.innerHTML = '';
+    actors.slice(0, 10).forEach((a) => {
+      const col = threatColor(a.feeds).toCssColorString();
+      const row = document.createElement('div');
+      row.className = 'threat';
+      row.innerHTML = `<span class="dot" style="background:${col};color:${col}"></span>
+        <span><div class="name">${a.ip}</div><div class="meta">${a.city || '?'}, ${a.country || '?'}</div></span>
+        <span class="f">${a.feeds}&times;</span>`;
+      row.onclick = () => { const e = threatEntities.get(a.ip); if (e) viewer.flyTo(e, { duration: 1.2 }); };
+      threatsEl.appendChild(row);
+    });
+    threatStampEl.textContent = `${actors.length} plotted · ${totals.denylist_candidates || 0} denylist-grade`
+      + (gen ? ` · ${new Date(gen).toLocaleDateString()}` : '');
+  }
+  async function pollThreats() {
+    try {
+      const r = await fetch('/api/threats', { cache: 'no-store' });
+      const { actors, totals, generated_at } = await r.json();
+      const seen = new Set();
+      actors.forEach((a) => {
+        seen.add(a.ip);
+        const pos = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
+        const col = threatColor(a.feeds);
+        let e = threatEntities.get(a.ip);
+        if (!e) {
+          e = viewer.entities.add({
+            position: pos,
+            point: { pixelSize: 5 + (a.feeds || 4) * 1.7, color: col,
+                     outlineColor: Cesium.Color.fromCssColorString('#2a0a0f'), outlineWidth: 1,
+                     disableDepthTestDistance: DDT, heightReference: CLAMP },
+          });
+          threatEntities.set(a.ip, e);
+        }
+        e.position = pos; e.point.color = col;
+        e.description = `<table class="cesium-infoBox-defaultTable"><tbody>
+          <tr><th>attacker</th><td>${a.ip}</td></tr>
+          <tr><th>corroboration</th><td>${a.feeds} independent feeds</td></tr>
+          <tr><th>where</th><td>${a.city || '?'}, ${a.country || '?'}</td></tr>
+          <tr><th>categories</th><td>${a.categories || ''}</td></tr></tbody></table>`;
+      });
+      for (const [ip, e] of threatEntities) {
+        if (!seen.has(ip)) { viewer.entities.remove(e); threatEntities.delete(ip); }
+      }
+      renderThreatHud(actors, totals, generated_at);
+    } catch (e) {
+      threatStampEl.textContent = 'threat feed error';
+    }
+  }
+  document.getElementById('world-btn').onclick = () =>
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(20, 15, 26_000_000), duration: 1.6 });
+  document.getElementById('fleet-btn').onclick = () =>
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(-95, 30.0, 4_200_000), orientation: { heading: 0, pitch: TILT, roll: 0 }, duration: 1.6 });
+  pollThreats();
+  setInterval(pollThreats, 60_000);
+
+  // ---- Argus Wire: LLM-written breaking news from the 911 dispatch feed. ----
+  async function pollNews() {
+    try {
+      const { stories = [], generated_at } = await (await fetch('/api/newsroom', { cache: 'no-store' })).json();
+      const el = document.getElementById('news-list'); el.innerHTML = '';
+      stories.slice(0, 10).forEach((s) => {
+        const d = document.createElement('div'); d.className = 'story';
+        d.innerHTML = `<div class="hd">${s.headline || ''}</div><div class="bd">${s.body || ''}</div>` +
+          `<div class="mt">${s.cat || ''} · ${s.city || ''}${s.time ? ' · ' + new Date(s.time).toLocaleTimeString() : ''}</div>`;
+        d.onclick = () => { if (s.lat && s.lon) viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(s.lon, s.lat, 60000), duration: 1.5 }); };
+        el.appendChild(d);
+      });
+      document.getElementById('news-stamp').textContent = (stories.length ? stories.length + ' stories' : 'no stories yet') + (generated_at ? ' · ' + new Date(generated_at).toLocaleString() : '');
+    } catch (e) { /* */ }
+  }
+  pollNews();
+  setInterval(pollNews, 60_000);
+
+  // ---- Eyewitness: leading-edge crisis-zone footage from public Telegram aggregators. ----
+  // ALWAYS surfaced as UNVERIFIED — recycled/AI clips are common. Click opens the source post.
+  const ewAge = (m) => m < 60 ? m + 'm ago' : m < 1440 ? Math.round(m/60) + 'h ago' : Math.round(m/1440) + 'd ago';
+  const ewViews = (v) => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(1)+'K' : (v||0);
+  const esc = (s) => (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  async function pollEyewitness() {
+    try {
+      const [ew, trj] = await Promise.all([
+        (await fetch('/api/eyewitness', { cache: 'no-store' })).json(),
+        (await fetch('/api/eyewitness_tr', { cache: 'no-store' })).json().catch(() => ({ items: {} })),
+      ]);
+      const { items = [], channels = 0, ts } = ew;
+      const TR = trj.items || {};
+      const el = document.getElementById('ew-list'); el.innerHTML = '';
+      items.slice(0, 24).forEach((it) => {
+        const tr = TR[it.url] || null;
+        const en = tr && tr.en, isForeign = it.lang !== 'en';
+        const a = document.createElement('a');
+        a.className = 'ew'; a.href = it.url; a.target = '_blank'; a.rel = 'noreferrer';
+        const thumb = it.thumb
+          ? `<div class="thumb" style="background-image:url('${it.thumb}')">${it.hasVideo ? '<span class="play">&#9654;</span>' : ''}</div>`
+          : `<div class="thumb">${it.hasVideo ? '<span class="play">&#9654;</span>' : ''}</div>`;
+        // English on top when we have it; original caption as a dim sub-line for foreign posts.
+        const capMain = en ? esc(en) : esc(it.label);
+        const capOrig = (en && isForeign && it.text) ? `<div class="orig">${esc(it.text).slice(0,120)}</div>` : '';
+        const why = tr && tr.why ? `<div class="why">${esc(tr.why)}</div>` : '';
+        const flag = tr && tr.flag && tr.flag !== 'none'
+          ? `<span class="flag">&#9888; ${tr.flag === 'ai' ? 'possible AI' : 'possibly recycled'}</span>` : '';
+        a.innerHTML = thumb +
+          `<div><div class="cap">${capMain}</div>${capOrig}${why}` +
+          `<div class="mt"><span class="rg">${esc(it.region)}</span><span>${esc(it.source)}</span>` +
+          `<span>${ewAge(it.ageMin)}</span>${it.views ? '<span>&#128065; '+ewViews(it.views)+'</span>' : ''}` +
+          `${it.hasVideo ? '<span>&#9654; video</span>' : ''}${flag}</div></div>`;
+        el.appendChild(a);
+      });
+      const trCount = Object.keys(TR).length;
+      document.getElementById('ew-stamp').textContent =
+        (items.length ? items.length + ' clips · ' + channels + ' channels' : 'no recent footage') +
+        (trCount ? ' · ' + trCount + ' translated' : '') +
+        (ts ? ' · ' + new Date(ts).toLocaleTimeString() : '') + ' · unverified';
+    } catch (e) { /* keep prior */ }
+  }
+  pollEyewitness();
+  setInterval(pollEyewitness, 120_000);
+
+  // ============ Intel-fusion layers (live open-source ingestion) ============
+  const intelCfg = { disasters:{ms:300000}, flights:{ms:20000}, sigint:{ms:600000}, humint:{ms:900000}, cameras:{ms:120000}, publicsafety:{ms:60000}, radiation:{ms:1800000}, launches:{ms:3600000}, volcanoes:{ms:1800000}, spacewx:{ms:900000}, maritime:{ms:15000}, hormuz:{ms:10000}, lightning:{ms:8000}, outages:{ms:300000}, fire:{ms:900000} };
+  const intelState = {};
+  const REG = {};  // registry source id -> color (populated from /api/registry)
+  const CAP = { cameras:700, flights:500, sigint:400, humint:250, disasters:500, publicsafety:600, radiation:500, launches:40, volcanoes:60, spacewx:900, maritime:3000, hormuz:1000, lightning:2500, outages:200, fire:4000 };
+  function intelColor(it) {
+    if (REG[it.kind]) return REG[it.kind];
+    switch (it.kind) {
+      case 'quake': { const t = Math.min(1, ((it.sev||2)-2)/5); return `rgb(255,${Math.round(180-140*t)},60)`; }
+      case 'eonet': return '#ff6b3d'; case 'gdacs': return '#ffd23d';
+      case 'flight': return it.mil ? '#ff4d5e' : '#38bdf8';
+      case 'radio': return '#c084fc'; case 'news': return '#fbbf24'; case 'cam': return '#31d67a';
+      case 'dispatch': return '#ff4d4d'; case 'scanner': return '#5e8bff';
+      case 'radiation': { const t = Math.min(1, (it.sev || 0) / 100); return `rgb(${Math.round(120+135*t)},${Math.round(230-160*t)},60)`; }
+      case 'launch': return '#67e8f9'; case 'volcano': return '#f97316'; case 'aurora': return '#4ade80';
+      case 'ship': return '#2dd4bf'; case 'hship': return '#f59e0b';
+      case 'strike': return '#fde047'; case 'outage': return (it.sev||2) >= 3 ? '#ef4444' : '#f59e0b';
+      case 'fire': { const t = Math.min(1, (it.frp||0)/80); return `rgb(255,${Math.round(140-120*t)},${Math.round(60-40*t)})`; }
+      default: return '#9aa7bd';
+    }
+  }
+  const intelSize = (it) => it.kind === 'quake' ? 4 + (it.sev||2)*1.4 : it.kind === 'launch' ? 8 : it.kind === 'volcano' ? 9 : it.kind === 'aurora' ? 3 : it.kind === 'ship' ? 3 : it.kind === 'hship' ? 5 : it.kind === 'strike' ? 2 : it.kind === 'fire' ? 3 : it.kind === 'outage' ? 6 + (it.sev||2)*2 : it.kind === 'radiation' ? 4 : (it.kind === 'flight' || it.kind === 'cam') ? 5 : 6;
+  function intelDesc(it) {
+    if (it.kind === 'cam') return `<b>${it.label||'camera'}</b><br><span style="color:#7b8ba0">${it.src||''}</span>`
+      + (it.img ? `<br><img src="${it.img}" style="width:280px;max-width:100%;border-radius:6px;margin-top:6px" referrerpolicy="no-referrer">` : '')
+      + (it.stream ? `<br><a href="${it.stream}" target="_blank" rel="noreferrer">&#9654; watch live</a>` : '');
+    if (it.kind === 'news') return `<b>${it.label||''}</b><br>${it.country||''} · ` + (it.url ? `<a href="${it.url}" target="_blank" rel="noreferrer">${it.domain||'source'}</a>` : (it.domain||''));
+    if (it.kind === 'dispatch') return `<b>${it.label||'incident'}</b><br>${it.city||''}${it.agency?' · '+it.agency:''}${it.pri?' · priority '+it.pri:''}`;
+    if (it.kind === 'scanner') return `<b>${it.label||'scanner'}</b><br>${it.city||''}, ${it.state||''}${it.listeners!=null?' · '+it.listeners+' listening':''}` + (it.listen ? `<br><a href="${it.listen}" target="_blank" rel="noreferrer">listen live on OpenMHz</a>` : '');
+    if (it.kind === 'launch') return `<b>${it.label||'launch'}</b><br>${it.pad||''}${it.net ? '<br>' + new Date(it.net).toLocaleString() : ''}${it.status ? ' · ' + it.status : ''}`;
+    if (it.kind === 'volcano') return `<b>${it.label||'Volcano'}</b><br>${it.desc || ('alert: ' + (it.sev||''))}`;
+    if (it.kind === 'radiation') return `<b>${it.label}</b> radiation<br>Safecast${it.time ? ' · ' + new Date(it.time).toLocaleDateString() : ''}`;
+    if (it.kind === 'aurora') return `<b>${it.label}</b><br>NOAA OVATION auroral oval`;
+    if (it.kind === 'flight') return `<table class="cesium-infoBox-defaultTable"><tbody><tr><th>callsign</th><td>${it.callsign||'?'}${it.mil?' &#9739; MIL':''}</td></tr><tr><th>alt</th><td>${it.alt||'?'} m</td></tr><tr><th>hdg</th><td>${Math.round(it.heading||0)}&deg;</td></tr>${it.type?`<tr><th>type</th><td>${it.type}</td></tr>`:''}</tbody></table>`;
+    if (it.kind === 'ship' || it.kind === 'hship') return `<table class="cesium-infoBox-defaultTable"><tbody><tr><th>vessel</th><td>${it.label||'?'}</td></tr><tr><th>MMSI</th><td>${it.mmsi||'?'}</td></tr><tr><th>speed</th><td>${it.sog!=null?it.sog+' kn':'?'}</td></tr><tr><th>course</th><td>${it.cog!=null?Math.round(it.cog)+'&deg;':'?'}</td></tr></tbody></table>`;
+    if (it.kind === 'outage') return `<b>&#127760; ${it.country||'internet outage'}</b><br>${it.label||''}<br><span style="color:#7b8ba0">IODA — connectivity below normal</span>`;
+    if (it.kind === 'fire') return `<b>&#128293; active fire</b><br>radiative power: ${Math.round(it.frp||0)} MW${it.conf?'<br>confidence: '+it.conf:''}<br><span style="color:#7b8ba0">NASA FIRMS / VIIRS</span>`;
+    if (it.kind === 'strike') return `<b>&#9889; lightning strike</b><br><span style="color:#7b8ba0">Blitzortung — last 5 min</span>`;
+    return `<b>${it.label||it.kind}</b>`;
+  }
+  const intelId = (name, it, i) => it.kind === 'flight'
+    ? name + (it.callsign || (it.lat.toFixed(3)+it.lon.toFixed(3)))
+    : name + (it.lat.toFixed(3)+','+it.lon.toFixed(3)+':'+i);
+  async function pollIntel(name) {
+    const S = intelState[name]; if (!S || !S.on) return;
+    try {
+      const r = await fetch('/api/intel/' + name, { cache: 'no-store' });
+      const { items = [] } = await r.json();
+      const shown = items.slice(0, CAP[name] || 800), seen = new Set();
+      shown.forEach((it, i) => {
+        if (it.lat == null || it.lon == null) return;
+        const id = intelId(name, it, i); seen.add(id);
+        const col = Cesium.Color.fromCssColorString(intelColor(it));
+        let e = S.ents.get(id);
+        if (!e) { e = viewer.entities.add({ point: { pixelSize: intelSize(it), color: col, outlineColor: Cesium.Color.BLACK.withAlpha(0.35), outlineWidth: 1, disableDepthTestDistance: DDT, heightReference: CLAMP } }); S.ents.set(id, e); }
+        e.position = Cesium.Cartesian3.fromDegrees(it.lon, it.lat);
+        e.point.color = col; e.description = intelDesc(it);
+      });
+      for (const [id, e] of S.ents) { if (!seen.has(id)) { viewer.entities.remove(e); S.ents.delete(id); } }
+      const ct = document.getElementById('ct-' + name); if (ct) ct.textContent = items.length;
+    } catch (e) { /* keep prior */ }
+  }
+  // Satellites — SGP4 from brokered TLEs, re-propagated every 3s (they orbit above the globe).
+  let satRecs = [], satEnts = new Map(), satLoaded = false;
+  async function loadSats() {
+    if (satLoaded || typeof satellite === 'undefined') return;
+    try {
+      const { sats = [] } = await (await fetch('/api/intel/satellites', { cache: 'no-store' })).json();
+      satRecs = sats.map((s) => { try { return { name: s.name, rec: satellite.twoline2satrec(s.tle1, s.tle2) }; } catch { return null; } }).filter(Boolean);
+      satLoaded = true; document.getElementById('ct-satellites').textContent = satRecs.length;
+    } catch (e) { /* */ }
+  }
+  function tickSats() {
+    if (!intelState.satellites || !intelState.satellites.on || typeof satellite === 'undefined') return;
+    const now = new Date(), gmst = satellite.gstime(now);
+    satRecs.forEach((s, i) => {
+      try {
+        const pv = satellite.propagate(s.rec, now); if (!pv.position) return;
+        const gd = satellite.eciToGeodetic(pv.position, gmst);
+        const lon = satellite.degreesLong(gd.longitude), lat = satellite.degreesLat(gd.latitude), alt = gd.height * 1000;
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        let e = satEnts.get(i);
+        if (!e) { e = viewer.entities.add({ point: { pixelSize: 4, color: Cesium.Color.WHITE, outlineColor: Cesium.Color.fromCssColorString('#1b2a3f'), outlineWidth: 1, disableDepthTestDistance: DDT } }); satEnts.set(i, e); }
+        e.position = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+        e.description = `<b>${s.name}</b><br>alt ${Math.round(alt/1000)} km`;
+      } catch { /* */ }
+    });
+  }
+  setInterval(tickSats, 3000);
+  function bindToggle(box) {
+    box.addEventListener('change', () => {
+      const name = box.dataset.layer;
+      if (name === 'satellites') {
+        intelState.satellites = intelState.satellites || { on: false };
+        intelState.satellites.on = box.checked;
+        if (box.checked) loadSats().then(tickSats);
+        else { for (const [, e] of satEnts) viewer.entities.remove(e); satEnts.clear(); }
+        return;
+      }
+      let S = intelState[name] || (intelState[name] = { on: false, ents: new Map(), timer: null });
+      S.on = box.checked;
+      if (box.checked) { pollIntel(name); S.timer = setInterval(() => pollIntel(name), (intelCfg[name]||{ms:300000}).ms); }
+      else { clearInterval(S.timer); S.timer = null; for (const [, e] of S.ents) viewer.entities.remove(e); S.ents.clear(); const ct = document.getElementById('ct-' + name); if (ct) ct.textContent = '—'; }
+    });
+  }
+  document.querySelectorAll('#intel input[data-layer]').forEach(bindToggle);
+
+  // ============ Registry layers (config-driven — the "global intelligence stratus") ============
+  // Sources declared in sources.json become live layers with no frontend code: fetch the
+  // manifest, register each source's color/cadence/cap, and append a togglable row.
+  (async () => {
+    try {
+      const reg = await (await fetch('/api/registry', { cache: 'no-store' })).json();
+      const sources = reg.sources || reg;
+      if (!Array.isArray(sources) || !sources.length) return;
+      const panel = document.getElementById('intel');
+      const hdr = document.createElement('div');
+      hdr.className = 'sub'; hdr.style.cssText = 'margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px';
+      hdr.textContent = 'registry — config-driven sources';
+      panel.appendChild(hdr);
+      for (const s of sources) {
+        REG[s.id] = s.color || '#9aa7bd';
+        intelCfg[s.id] = { ms: s.cadence || 300000 };
+        CAP[s.id] = s.cap || 600;
+        const lbl = document.createElement('label');
+        lbl.className = 'lyr';
+        lbl.innerHTML =
+          `<input type="checkbox" data-layer="${s.id}">` +
+          `<span class="sw" style="color:${REG[s.id]}"></span>` +
+          `<span><div class="nm">${s.name || s.id}</div><div class="disc">${s.discipline || 'registry'}</div></span>` +
+          `<span class="ct" id="ct-${s.id}">&mdash;</span>`;
+        panel.appendChild(lbl);
+        bindToggle(lbl.querySelector('input'));
+      }
+    } catch (e) { /* registry optional */ }
+  })();
+
+  // ============ Draggable panels — grab any panel by its title bar to reposition. ============
+  // Positions persist per-panel in localStorage; double-click a title bar to snap it back.
+  function makeDraggable(el, handle, key) {
+    if (!el || !handle) return;
+    handle.title = 'drag to move · double-click to reset';
+    handle.style.touchAction = 'none';
+    // Restore a saved position (switch from the CSS right/bottom anchor to left/top).
+    try {
+      const s = JSON.parse(localStorage.getItem(key) || 'null');
+      if (s && typeof s.left === 'number') { el.style.left = s.left + 'px'; el.style.top = s.top + 'px'; el.style.right = 'auto'; el.style.bottom = 'auto'; }
+    } catch { /* ignore */ }
+    let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      const r = el.getBoundingClientRect();
+      el.style.left = r.left + 'px'; el.style.top = r.top + 'px'; el.style.right = 'auto'; el.style.bottom = 'auto';
+      dragging = true; el.classList.add('panel-dragging');
+      sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+      try { handle.setPointerCapture(e.pointerId); } catch { /* synthetic/invalid pointer */ }
+      e.preventDefault();
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const m = 4, w = el.offsetWidth, h = el.offsetHeight;
+      let nx = ox + (e.clientX - sx), ny = oy + (e.clientY - sy);
+      nx = Math.max(m, Math.min((window.innerWidth || w) - w - m, nx));
+      ny = Math.max(m, Math.min((window.innerHeight || h) - h - m, ny));
+      el.style.left = nx + 'px'; el.style.top = ny + 'px';
+    });
+    const end = () => {
+      if (!dragging) return;
+      dragging = false; el.classList.remove('panel-dragging');
+      try { localStorage.setItem(key, JSON.stringify({ left: parseInt(el.style.left, 10), top: parseInt(el.style.top, 10) })); } catch { /* ignore */ }
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    handle.addEventListener('dblclick', () => {
+      el.style.left = el.style.top = el.style.right = el.style.bottom = '';   // back to CSS defaults
+      try { localStorage.removeItem(key); } catch { /* ignore */ }
+    });
+  }
+  [['hud','ge_pos_hud'], ['intel','ge_pos_intel'], ['newswire','ge_pos_news'], ['eyewitness','ge_pos_ew']]
+    .forEach(([id, key]) => { const el = document.getElementById(id); makeDraggable(el, el && el.querySelector('h1'), key); });
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+[
+  { "name": "gateway", "host": "203.0.113.10", "port": 443, "role": "API gateway" },
+  { "name": "app-1", "host": "203.0.113.20", "port": 443, "role": "application server" },
+  { "name": "db-1", "host": "203.0.113.30", "port": 5432, "role": "database" }
+]

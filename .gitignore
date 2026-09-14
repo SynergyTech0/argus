@@ -1,0 +1,29 @@
+# ── Secrets & credentials — NEVER commit ──────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Telegram MTProto session = a live account credential
+.tg_session*
+
+# ── Your own estate (bring-your-own; example ships instead) ───────────
+fleet.json
+
+# ── Private publishing pipeline (not part of the public apparatus) ────
+publish.mjs
+tg_fetch.py
+
+# ── Generated / runtime data (not source) ─────────────────────────────
+threats.json
+eyewitness_tr.json
+verify_*.json
+pnn_stories.json
+news_candidates.json
+newsroom.json
+media/
+
+# ── Node ──────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*

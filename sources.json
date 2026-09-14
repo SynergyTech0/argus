@@ -1,0 +1,19 @@
+[
+  {
+    "id": "nyc311", "name": "NYC 311 complaints", "discipline": "civic", "shape": "records",
+    "url": "https://data.cityofnewyork.us/resource/erm2-nwe9.json?$limit=400&$order=created_date+desc",
+    "lat": "latitude", "lon": "longitude", "type": "complaint_type",
+    "color": "#f59e0b", "cadence": 300000, "cap": 400
+  },
+  {
+    "id": "citibike", "name": "NYC Citibike stations", "discipline": "transit", "shape": "records",
+    "root": "data.stations", "url": "https://gbfs.citibikenyc.com/gbfs/en/station_information.json",
+    "lat": "lat", "lon": "lon", "type": "name",
+    "color": "#22d3ee", "cadence": 3600000, "cap": 700
+  },
+  {
+    "id": "usgs25", "name": "USGS quakes M2.5+ (registry)", "discipline": "geoint", "shape": "geojson",
+    "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson",
+    "type": "place", "color": "#fb923c", "cadence": 300000, "cap": 400
+  }
+]
